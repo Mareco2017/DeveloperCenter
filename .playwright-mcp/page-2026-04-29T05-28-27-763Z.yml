@@ -1,0 +1,24 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e4]:
+    - generic [ref=e5]:
+      - heading "EXE开发者中心" [level=1] [ref=e6]
+      - paragraph [ref=e7]: 企业开发者平台
+    - generic [ref=e8]:
+      - generic [ref=e12]:
+        - img [ref=e15]
+        - textbox "用户名/手机号/邮箱" [ref=e17]
+      - generic [ref=e21]:
+        - img [ref=e24]
+        - textbox "密码" [ref=e27]
+      - button "登录" [ref=e30] [cursor=pointer]:
+        - generic [ref=e31]: 登录
+      - generic [ref=e32]:
+        - link "注册账号" [ref=e33] [cursor=pointer]:
+          - /url: /register
+        - link "忘记密码？" [ref=e34] [cursor=pointer]:
+          - /url: /forgot-password
+  - generic [ref=e35]:
+    - generic "Toggle devtools panel" [ref=e36] [cursor=pointer]:
+      - img [ref=e37]
+    - generic "Toggle Component Inspector" [ref=e42] [cursor=pointer]:
+      - img [ref=e43]

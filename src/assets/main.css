@@ -1,0 +1,130 @@
+@import './base.css';
+
+/* 移除所有卡片的阴影 - 使用html根元素提高优先级 */
+html body .el-card,
+html body .el-card__body {
+  box-shadow: none !important;
+}
+
+/* 移除所有卡片hover时的阴影 */
+html body .el-card:hover,
+html body .el-card__body:hover {
+  box-shadow: none !important;
+}
+
+/* 移除el-card内部所有元素的阴影 */
+html body .el-card *,
+html body .el-card__body *,
+html body .el-card *::before,
+html body .el-card *::after {
+  box-shadow: none !important;
+}
+
+/* 移除所有div的阴影 */
+html body div {
+  box-shadow: none !important;
+}
+
+/* 移除其他容器元素的阴影 */
+html body .container,
+html body .wrapper,
+html body .content,
+html body .section,
+html body .card,
+html body .panel,
+html body .box {
+  box-shadow: none !important;
+}
+
+/* 移除Element Plus组件的默认阴影 */
+html body .el-header,
+html body .el-footer,
+html body .el-aside,
+html body .el-main,
+html body .el-form,
+html body .el-form-item,
+html body .el-form-item__content,
+html body .el-input,
+html body .el-input__wrapper,
+html body .el-input__inner,
+html body .el-select,
+html body .el-select__wrapper,
+html body .el-button,
+html body .el-table,
+html body .el-table__inner-wrapper,
+html body .el-table__header-wrapper,
+html body .el-table__body-wrapper,
+html body .el-tree,
+html body .el-pagination,
+html body .el-checkbox,
+html body .el-checkbox__input,
+html body .el-checkbox__inner,
+html body .el-tag {
+  box-shadow: none !important;
+}
+
+/* 移除所有元素的阴影 - 最终保险 */
+html body * {
+  box-shadow: none !important;
+}
+
+/* 移除所有伪元素的阴影 */
+html body *::before,
+html body *::after {
+  box-shadow: none !important;
+}
+
+/* 为输入框和选择框添加边框样式，使其在视觉上更明显 */
+html body .el-input__wrapper,
+html body .el-select__wrapper {
+  box-shadow: 0 0 0 1px #dcdfe6 inset !important;
+  background-color: #ffffff !important;
+}
+
+/* 输入框和选择框聚焦时的边框样式 */
+html body .el-input__wrapper.is-focus,
+html body .el-select__wrapper.is-focused {
+  box-shadow: 0 0 0 1px #165dff inset !important;
+}
+
+/* 输入框和选择框hover时的边框样式 */
+html body .el-input__wrapper:hover,
+html body .el-select__wrapper:hover {
+  box-shadow: 0 0 0 1px #c0c4cc inset !important;
+}
+
+/* 为文本域添加边框样式 */
+html body .el-textarea__inner {
+  box-shadow: 0 0 0 1px #dcdfe6 inset !important;
+  background-color: #ffffff !important;
+}
+
+/* 文本域聚焦时的边框样式 */
+html body .el-textarea__inner:focus {
+  box-shadow: 0 0 0 1px #165dff inset !important;
+}
+
+/* 文本域hover时的边框样式 */
+html body .el-textarea__inner:hover {
+  box-shadow: 0 0 0 1px #c0c4cc inset !important;
+}
+
+#app {
+  width: 100%;
+  min-height: 100vh;
+  font-weight: normal;
+}
+
+a,
+.green {
+  text-decoration: none;
+  color: hsla(160, 100%, 37%, 1);
+  transition: 0.4s;
+  padding: 3px;
+}
+
+@media (hover: hover) {
+  a:hover {
+    background-color: hsla(160, 100%, 37%, 0.2);
+  }
+}
