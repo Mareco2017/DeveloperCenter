@@ -3,11 +3,24 @@ import { ElMessage } from 'element-plus'
 import { useUserStore } from '@/stores/user'
 
 /**
- * 创建axios实例
+ * 计算 API 基础地址。
+ * 场景：本地开发没有配置环境变量时继续访问 3001 端口；Vercel 等生产部署不能访问访问者本机 localhost，
+ * 因此生产默认使用同域 /api，并由部署平台或独立后端域名承接请求。
+ */
+const resolveApiBaseUrl = (): string => {
+  if (import.meta.env.VITE_API_BASE_URL) {
+    return import.meta.env.VITE_API_BASE_URL
+  }
+
+  return import.meta.env.DEV ? 'http://localhost:3001/api' : '/api'
+}
+
+/**
+ * 创建axios实例。
+ * 依赖：resolveApiBaseUrl 根据 Vite 当前构建模式选择开发或生产 API 入口。
  */
 const request: AxiosInstance = axios.create({
-  // 开发环境默认后端端口为 3001；优先读取 .env 中的 VITE_API_BASE_URL，缺省时使用同一端口兜底。
-  baseURL: import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001/api',
+  baseURL: resolveApiBaseUrl(),
   timeout: 10000,
   headers: {
     'Content-Type': 'application/json'

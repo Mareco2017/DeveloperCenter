@@ -41,6 +41,19 @@ npm run dev
 npm run build
 ```
 
+### Production API Configuration
+
+The frontend uses `VITE_API_BASE_URL` as the API entry. Local development reads
+`.env.development` and points to `http://localhost:3001/api`.
+
+When deploying the frontend to Vercel, do not point the production build to
+`localhost`. Either:
+
+- configure `VITE_API_BASE_URL` in Vercel to a deployed backend URL, for example
+  `https://api.example.com/api`;
+- or keep the default `/api` and configure Vercel/API hosting to serve backend
+  routes under the same domain.
+
 ### Lint with [ESLint](https://eslint.org/)
 
 ```sh
