@@ -16,12 +16,25 @@ import { Terminal } from '../entities/Terminal';
 import { hashPassword } from '../utils/password';
 
 /**
+ * 解析 SQLite 数据库路径。
+ * 场景：本地开发继续使用 server/data/developer.db；Vercel Serverless 文件系统只能写 /tmp，
+ * 因此未显式配置 DB_PATH 时使用 /tmp/developer.db 作为函数运行期数据库。
+ */
+const resolveDatabasePath = (): string => {
+  if (process.env.DB_PATH) {
+    return process.env.DB_PATH;
+  }
+
+  return process.env.VERCEL ? '/tmp/developer.db' : './data/developer.db';
+};
+
+/**
  * SQLite数据库配置
  * 使用TypeORM管理数据库连接和实体
  */
 export const AppDataSource = new DataSource({
   type: 'sqlite',
-  database: process.env.DB_PATH || './data/developer.db',
+  database: resolveDatabasePath(),
   synchronize: true, // 开发环境自动同步，生产环境建议关闭
   logging: process.env.NODE_ENV === 'development',
   entities: [
