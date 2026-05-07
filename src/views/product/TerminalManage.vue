@@ -187,6 +187,15 @@
                     <div class="scenario-info">
                       <p><strong>场景编码：</strong>{{ selectedScenario.code }}</p>
                       <p>
+                        <strong>登录身份：</strong>
+                        <el-tag
+                          :type="hasScenarioLoginIdentityConfig(selectedScenario) ? 'success' : 'info'"
+                          size="small"
+                        >
+                          {{ formatScenarioLoginIdentitySummary(selectedScenario.loginIdentityConfig) }}
+                        </el-tag>
+                      </p>
+                      <p>
                         <strong>H5门户：</strong>
                         <el-tag v-if="selectedScenario.h5PortalConfig" type="success" size="small">已配置</el-tag>
                         <el-tag v-else type="info" size="small">未配置</el-tag>
@@ -383,6 +392,16 @@ const configForm = reactive({
 const selectedScenario = computed(() => {
   return scenarios.value.find(s => s.id === configForm.scenarioId)
 })
+
+// 格式化场景登录身份摘要，用于终端绑定场景时预览生效身份范围。
+const formatScenarioLoginIdentitySummary = (configText?: string) => {
+  return scenarioApi.formatScenarioLoginIdentitySummary(configText)
+}
+
+// 判断场景是否存在有效身份白名单，用于区分已配置和未配置状态。
+const hasScenarioLoginIdentityConfig = (scenario: Scenario) => {
+  return scenarioApi.parseScenarioLoginIdentityConfig(scenario.loginIdentityConfig).identityTypes.length > 0
+}
 
 // 登录配置表单
 const loginConfigForm = reactive({
