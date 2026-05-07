@@ -49,11 +49,13 @@ export const createApp = () => {
 
   /**
    * 健康检查。
-   * 场景：部署后可通过 /health 或 Function 内部探针确认服务实例可响应。
+   * 场景：部署后可通过 /health 或 /api/health 确认服务实例可响应；/api/health 适配 Vercel 同域 API 入口。
    */
-  app.get('/health', (req, res) => {
+  const healthHandler = (req: express.Request, res: express.Response) => {
     res.json({ status: 'ok', timestamp: new Date().toISOString() });
-  });
+  };
+  app.get('/health', healthHandler);
+  app.get('/api/health', healthHandler);
 
   /**
    * 统一错误处理。

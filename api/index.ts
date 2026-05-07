@@ -34,6 +34,16 @@ const ensureDatabaseReady = async (): Promise<void> => {
  * 依赖：vercel.json 将 /api/* 转发到本入口，再由 Express 按原始 /api/* 路由分发。
  */
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  await ensureDatabaseReady();
-  return app(req, res);
+  try {
+    await ensureDatabaseReady();
+    return app(req, res);
+  } catch (error: any) {
+    console.error('Vercel API 初始化失败:', error);
+    res.status(500).json({
+      code: 500,
+      message: 'API 初始化失败',
+      data: null,
+      error: process.env.DEBUG_API_ERRORS === 'true' ? error?.message : undefined
+    });
+  }
 }
