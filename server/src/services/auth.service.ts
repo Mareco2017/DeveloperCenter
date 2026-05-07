@@ -111,7 +111,7 @@ export const login = async (
  */
 export const refreshToken = async (refreshToken: string): Promise<string> => {
   try {
-    const { verifyToken } = await import('../utils/jwt');
+    const { verifyToken } = await import('../utils/jwt.js');
     const payload = verifyToken(refreshToken);
     return generateAccessToken({ userId: payload.userId, username: payload.username });
   } catch (error) {

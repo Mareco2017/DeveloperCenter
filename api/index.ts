@@ -19,8 +19,8 @@ const ensureAppReady = async (): Promise<Express> => {
   }
 
   const [{ createApp }, { AppDataSource, initializeDatabase }] = await Promise.all([
-    import('../server/src/app'),
-    import('../server/src/config/database')
+    import('../server/src/app.js'),
+    import('../server/src/config/database.js')
   ]);
 
   if (AppDataSource.isInitialized) {
