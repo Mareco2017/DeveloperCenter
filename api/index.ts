@@ -1,22 +1,31 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import 'reflect-metadata';
 import dotenv from 'dotenv';
-
-import { createApp } from '../server/src/app';
-import { AppDataSource, initializeDatabase } from '../server/src/config/database';
+import type { Express } from 'express';
 
 dotenv.config();
 
-const app = createApp();
+let app: Express | null = null;
 let databaseReady: Promise<void> | null = null;
 
 /**
- * 确保 Serverless 实例只初始化一次数据库连接。
- * 场景：Vercel Function 冷启动时建立连接，后续同一实例复用连接，避免重复 initialize 抛错。
+ * 动态加载 Express 应用。
+ * 场景：避免在 Vercel Function 模块加载阶段就导入 sqlite3/TypeORM；若原生模块加载失败，
+ * 可以在 handler 内捕获并返回可诊断 JSON，而不是直接变成 Vercel 平台 500。
  */
-const ensureDatabaseReady = async (): Promise<void> => {
+const ensureAppReady = async (): Promise<Express> => {
+  if (app) {
+    return app;
+  }
+
+  const [{ createApp }, { AppDataSource, initializeDatabase }] = await Promise.all([
+    import('../server/src/app'),
+    import('../server/src/config/database')
+  ]);
+
   if (AppDataSource.isInitialized) {
-    return;
+    app = createApp();
+    return app;
   }
 
   if (!databaseReady) {
@@ -27,6 +36,8 @@ const ensureDatabaseReady = async (): Promise<void> => {
   }
 
   await databaseReady;
+  app = createApp();
+  return app;
 };
 
 /**
@@ -35,15 +46,15 @@ const ensureDatabaseReady = async (): Promise<void> => {
  */
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
-    await ensureDatabaseReady();
-    return app(req, res);
+    const readyApp = await ensureAppReady();
+    return readyApp(req, res);
   } catch (error: any) {
     console.error('Vercel API 初始化失败:', error);
     res.status(500).json({
       code: 500,
       message: 'API 初始化失败',
       data: null,
-      error: process.env.DEBUG_API_ERRORS === 'true' ? error?.message : undefined
+      error: error?.message || String(error)
     });
   }
 }
