@@ -23,6 +23,12 @@ const scenarioRepository = AppDataSource.getRepository(Scenario);
 const scenarioCapabilityRepository = AppDataSource.getRepository(ScenarioCapability);
 
 /**
+ * 判断是否为可用于查询实体的正整数ID。
+ * 场景：路由参数经过 parseInt 后可能变成 NaN，服务层统一拦截，避免把无效ID误报为业务对象不存在。
+ */
+const isValidEntityId = (id: number): boolean => Number.isInteger(id) && id > 0;
+
+/**
  * 创建产品
  * @param userId 用户ID
  * @param data 产品数据
@@ -606,6 +612,16 @@ export const deleteTerminal = async (terminalId: number, userId: number): Promis
  * @returns 场景方案列表
  */
 export const getScenarios = async (productId: number): Promise<Scenario[]> => {
+  // 关键控制点：列表入口也要校验产品存在，避免页面先展示空列表，新增时才报“产品不存在”。
+  if (!isValidEntityId(productId)) {
+    throw new Error('产品ID无效');
+  }
+
+  const product = await productRepository.findOne({ where: { id: productId } });
+  if (!product) {
+    throw new Error('产品不存在');
+  }
+
   return scenarioRepository.find({
     where: { productId },
     order: { createdAt: 'DESC' }
@@ -627,6 +643,10 @@ export const createScenario = async (
     name: string;
   }
 ): Promise<Scenario> => {
+  if (!isValidEntityId(productId)) {
+    throw new Error('产品ID无效');
+  }
+
   const product = await productRepository.findOne({ where: { id: productId } });
   if (!product) {
     throw new Error('产品不存在');

@@ -78,7 +78,7 @@
       </el-card>
 
       <!-- 添加场景方案卡片 -->
-      <el-card class="scenario-card add-card" shadow="hover" @click="showAddDialog = true">
+      <el-card v-if="productLoaded" class="scenario-card add-card" shadow="hover" @click="openAddDialog">
         <div class="add-content">
           <el-icon class="add-icon"><Plus /></el-icon>
           <span class="add-text">添加场景方案</span>
@@ -93,6 +93,7 @@
       v-model="showAddDialog"
       :title="isEdit ? '编辑场景方案' : '添加场景方案'"
       width="500px"
+      @closed="resetForm"
     >
       <el-form ref="formRef" :model="form" :rules="rules" label-width="100px">
         <el-form-item label="场景编码" prop="code">
@@ -153,7 +154,15 @@ import type { Scenario, ScenarioLoginIdentityConfig } from '@/api/scenario'
 // 路由
 const route = useRoute()
 const router = useRouter()
-const productId = computed(() => parseInt(route.params.id as string))
+/**
+ * 当前路由中的产品ID。
+ * 场景：场景方案页依赖产品ID请求详情、列表和创建接口；非法值统一返回 null，避免继续请求后端变成“产品不存在”。
+ */
+const productId = computed((): number | null => {
+  const rawId = Array.isArray(route.params.id) ? route.params.id[0] : route.params.id
+  const value = Number.parseInt(String(rawId ?? ''), 10)
+  return Number.isInteger(value) && value > 0 ? value : null
+})
 
 // 产品名称
 const productName = ref('')
@@ -164,6 +173,7 @@ const submitLoading = ref(false)
 const scenarios = ref<Scenario[]>([])
 const showAddDialog = ref(false)
 const isEdit = ref(false)
+const productLoaded = ref(false)
 const formRef = ref()
 
 // 登录身份配置
@@ -187,11 +197,53 @@ const rules = {
   name: [{ required: true, message: '请输入场景名称', trigger: 'blur' }]
 }
 
+/**
+ * 获取当前可用产品ID。
+ * 场景：所有需要产品上下文的操作前调用；依赖 route.params.id，拦截非法入口并给出前端可读提示。
+ */
+const requireProductId = () => {
+  if (!productId.value) {
+    ElMessage.error('产品ID无效，请从产品列表重新进入')
+    return null
+  }
+
+  return productId.value
+}
+
+/**
+ * 获取当前可用于新增/编辑场景的产品上下文。
+ * 场景：产品详情拉取成功后才能继续新增场景，避免产品被删除或路由失效时继续提交。
+ */
+const requireProductContext = () => {
+  const currentProductId = requireProductId()
+  if (!currentProductId) return null
+
+  if (!productLoaded.value) {
+    ElMessage.error('产品信息未加载成功，请从产品列表重新进入')
+    return null
+  }
+
+  return currentProductId
+}
+
+/**
+ * 打开添加场景方案弹窗。
+ * 场景：用户点击添加卡片时调用；依赖产品ID校验，避免在无效路由下继续提交创建请求。
+ */
+const openAddDialog = () => {
+  if (!requireProductContext()) return
+  resetForm()
+  showAddDialog.value = true
+}
+
 // 获取场景方案列表
 const fetchScenarios = async () => {
+  const currentProductId = requireProductId()
+  if (!currentProductId) return
+
   loading.value = true
   try {
-    const res = await scenarioApi.getScenarios(productId.value)
+    const res = await scenarioApi.getScenarios(currentProductId)
     scenarios.value = res
   } catch (error) {
     console.error('获取场景方案列表失败:', error)
@@ -203,10 +255,15 @@ const fetchScenarios = async () => {
 
 // 获取产品详情
 const fetchProductDetail = async () => {
+  const currentProductId = requireProductId()
+  if (!currentProductId) return
+
   try {
-    const res = await productApi.getProductDetail(productId.value)
+    const res = await productApi.getProductDetail(currentProductId)
     productName.value = res.name
+    productLoaded.value = true
   } catch (error) {
+    productLoaded.value = false
     console.error('获取产品详情失败:', error)
   }
 }
@@ -243,9 +300,12 @@ const handleEdit = (row: Scenario) => {
 
 // 删除场景方案
 const handleDelete = async (row: Scenario) => {
+  const currentProductId = requireProductContext()
+  if (!currentProductId) return
+
   try {
     await ElMessageBox.confirm('确定要删除该场景方案吗？', '提示', { type: 'warning' })
-    await scenarioApi.deleteScenario(productId.value, row.id)
+    await scenarioApi.deleteScenario(currentProductId, row.id)
     ElMessage.success('删除成功')
     fetchScenarios()
   } catch (error: any) {
@@ -268,6 +328,9 @@ const handleLoginConfig = (scenario: Scenario) => {
 // 保存登录身份配置
 const saveLoginConfig = async () => {
   if (!currentScenario.value) return
+  const currentProductId = requireProductContext()
+  if (!currentProductId) return
+
   if (loginConfigForm.identityTypes.length === 0) {
     ElMessage.warning('请至少选择一个登录身份')
     return
@@ -280,7 +343,7 @@ const saveLoginConfig = async () => {
       version: 1,
       identityTypes: [...loginConfigForm.identityTypes]
     }
-    await scenarioApi.updateScenario(productId.value, currentScenario.value.id, {
+    await scenarioApi.updateScenario(currentProductId, currentScenario.value.id, {
       loginIdentityConfig: JSON.stringify(config)
     })
     ElMessage.success('保存成功')
@@ -295,33 +358,41 @@ const saveLoginConfig = async () => {
 
 // 移动端门户配置
 const handleH5Portal = (scenario: Scenario) => {
+  const currentProductId = requireProductContext()
+  if (!currentProductId) return
+
   // 在新标签页打开移动端门户配置
-  const url = `/portal-designer/h5?scenarioId=${scenario.id}&productId=${productId.value}`
+  const url = `/portal-designer/h5?scenarioId=${scenario.id}&productId=${currentProductId}`
   window.open(url, '_blank')
 }
 
 // PC端门户配置
 const handlePcPortal = (scenario: Scenario) => {
+  const currentProductId = requireProductContext()
+  if (!currentProductId) return
+
   // 在新标签页打开PC端门户配置
-  const url = `/portal-designer/pc?scenarioId=${scenario.id}&productId=${productId.value}`
+  const url = `/portal-designer/pc?scenarioId=${scenario.id}&productId=${currentProductId}`
   window.open(url, '_blank')
 }
 
 // 提交表单
 const handleSubmit = async () => {
   if (!formRef.value) return
+  const currentProductId = requireProductContext()
+  if (!currentProductId) return
 
   try {
     await formRef.value.validate()
     submitLoading.value = true
 
     if (isEdit.value) {
-      await scenarioApi.updateScenario(productId.value, form.id, {
+      await scenarioApi.updateScenario(currentProductId, form.id, {
         name: form.name
       })
       ElMessage.success('更新成功')
     } else {
-      await scenarioApi.createScenario(productId.value, {
+      await scenarioApi.createScenario(currentProductId, {
         code: form.code,
         name: form.name
       })
@@ -329,7 +400,6 @@ const handleSubmit = async () => {
     }
 
     showAddDialog.value = false
-    resetForm()
     fetchScenarios()
   } catch (error: any) {
     if (error.message) {
@@ -349,17 +419,35 @@ const resetForm = () => {
   formRef.value?.resetFields()
 }
 
-// 监听对话框关闭
-watch(showAddDialog, (val) => {
-  if (!val) {
-    resetForm()
+/**
+ * 加载当前产品的场景页数据。
+ * 场景：首次进入和路由参数变化时调用；依赖 productId 校验，保证页面不会沿用旧产品的列表状态。
+ */
+const loadPageData = async () => {
+  if (!productId.value) {
+    productName.value = ''
+    scenarios.value = []
+    productLoaded.value = false
+    ElMessage.error('产品ID无效，请从产品列表重新进入')
+    return
   }
-})
+
+  productLoaded.value = false
+  // 关键控制点：先确认产品存在，再拉场景列表，避免不存在的产品页重复弹“产品不存在”。
+  await fetchProductDetail()
+  if (productLoaded.value) {
+    await fetchScenarios()
+  }
+}
 
 // 初始化
 onMounted(() => {
-  fetchProductDetail()
-  fetchScenarios()
+  loadPageData()
+})
+
+// 路由复用时重新加载当前产品数据，避免二次进入仍沿用旧产品上下文。
+watch(() => route.params.id, () => {
+  loadPageData()
 })
 </script>
 

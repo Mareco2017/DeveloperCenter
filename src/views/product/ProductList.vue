@@ -25,7 +25,7 @@
         <div class="search-actions">
           <el-button type="primary" @click="handleSearch">搜索</el-button>
           <el-button @click="handleReset">重置</el-button>
-          <el-button type="primary" @click="showCreateDialog = true">
+          <el-button type="primary" @click="openCreateDialog">
             <el-icon><Plus /></el-icon>
             创建产品
           </el-button>
@@ -84,6 +84,7 @@
       v-model="showCreateDialog"
       :title="isEdit ? '编辑产品' : '创建产品'"
       width="600px"
+      @closed="resetDialogForm"
     >
       <el-form ref="formRef" :model="form" :rules="rules" label-width="100px">
         <el-form-item label="产品名称" prop="name">
@@ -113,7 +114,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted, watch } from 'vue'
+import { ref, reactive, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus } from '@element-plus/icons-vue'
@@ -155,6 +156,15 @@ const rules = {
     { required: true, message: '请输入产品名称', trigger: 'blur' },
     { min: 2, max: 50, message: '长度在 2 到 50 个字符', trigger: 'blur' }
   ]
+}
+
+/**
+ * 打开产品创建弹窗。
+ * 场景：用户从产品列表新建产品时调用；依赖 resetDialogForm 先清理上一次编辑状态。
+ */
+const openCreateDialog = () => {
+  resetDialogForm()
+  showCreateDialog.value = true
 }
 
 /**
@@ -218,7 +228,6 @@ const handleSubmit = async () => {
     }
 
     showCreateDialog.value = false
-    formRef.value.resetFields()
     fetchProductList()
   } catch (error: any) {
     ElMessage.error(error.message || '操作失败')
@@ -236,6 +245,19 @@ const handleEdit = (row: Product) => {
   form.name = row.name
   form.description = row.description || ''
   showCreateDialog.value = true
+}
+
+/**
+ * 重置产品弹窗表单。
+ * 场景：Element Plus 弹窗完全关闭后再清理数据，避免关闭动画期间把编辑态内容提前清空。
+ * 依赖：resetFields 清理表单校验状态，手动赋默认值保证 id 等非校验字段同步复位。
+ */
+const resetDialogForm = () => {
+  isEdit.value = false
+  form.id = 0
+  form.name = ''
+  form.description = ''
+  formRef.value?.resetFields()
 }
 
 /**
@@ -359,14 +381,6 @@ const getStatusType = (status: number): string => {
 const formatDate = (date: string): string => {
   return new Date(date).toLocaleString('zh-CN')
 }
-
-// 监听对话框关闭
-watch(showCreateDialog, (val) => {
-  if (!val) {
-    isEdit.value = false
-    formRef.value?.resetFields()
-  }
-})
 
 // 初始化
 onMounted(() => {

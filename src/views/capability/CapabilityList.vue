@@ -25,7 +25,7 @@
         <div class="search-actions">
           <el-button type="primary" @click="handleSearch">搜索</el-button>
           <el-button @click="handleReset">重置</el-button>
-          <el-button type="primary" @click="showCreateDialog = true">
+          <el-button type="primary" @click="openCreateDialog">
             <el-icon><Plus /></el-icon>
             创建能力
           </el-button>
@@ -82,6 +82,7 @@
       v-model="showCreateDialog"
       :title="isEdit ? '编辑能力' : '创建能力'"
       width="600px"
+      @closed="resetDialogForm"
     >
       <el-form ref="formRef" :model="form" :rules="rules" label-width="100px">
         <el-form-item label="能力编码" prop="code">
@@ -129,7 +130,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted, watch } from 'vue'
+import { ref, reactive, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus } from '@element-plus/icons-vue'
@@ -177,6 +178,15 @@ const rules = {
     { required: true, message: '请输入能力名称', trigger: 'blur' },
     { min: 2, max: 50, message: '长度在 2 到 50 个字符', trigger: 'blur' }
   ]
+}
+
+/**
+ * 打开能力创建弹窗。
+ * 场景：用户从能力列表新建能力时调用；依赖 resetDialogForm 避免复用上一次编辑状态。
+ */
+const openCreateDialog = () => {
+  resetDialogForm()
+  showCreateDialog.value = true
 }
 
 /**
@@ -243,7 +253,6 @@ const handleSubmit = async () => {
     }
 
     showCreateDialog.value = false
-    formRef.value.resetFields()
     fetchCapabilityList()
   } catch (error: any) {
     ElMessage.error(error.message || '操作失败')
@@ -263,6 +272,21 @@ const handleEdit = (row: Capability) => {
   form.description = row.description || ''
   form.epassFuncId = row.epassFuncId || ''
   showCreateDialog.value = true
+}
+
+/**
+ * 重置能力弹窗表单。
+ * 场景：Element Plus 弹窗完全关闭后再清理数据，避免二次进入或关闭动画中出现字段闪空。
+ * 依赖：resetFields 清理校验状态，手动赋默认值覆盖 id、epassFuncId 等业务字段。
+ */
+const resetDialogForm = () => {
+  isEdit.value = false
+  form.id = 0
+  form.code = ''
+  form.name = ''
+  form.description = ''
+  form.epassFuncId = ''
+  formRef.value?.resetFields()
 }
 
 /**
@@ -359,14 +383,6 @@ const getStatusType = (status: number): string => {
 const formatDate = (date: string): string => {
   return new Date(date).toLocaleString('zh-CN')
 }
-
-// 监听对话框关闭，重置表单
-watch(showCreateDialog, (val) => {
-  if (!val) {
-    isEdit.value = false
-    formRef.value?.resetFields()
-  }
-})
 
 // 初始化
 onMounted(() => {
