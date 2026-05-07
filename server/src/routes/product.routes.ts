@@ -145,6 +145,21 @@ router.post('/:id/unpublish', async (req: Request, res: Response) => {
 });
 
 /**
+ * 获取产品可绑定能力列表
+ * GET /api/product/:id/bindable-capabilities
+ */
+router.get('/:id/bindable-capabilities', async (req: Request, res: Response) => {
+  try {
+    const userId = req.user!.userId;
+    const productId = parseInt(req.params.id as string);
+    const capabilities = await productService.getBindableCapabilities(productId, userId);
+    successResponse(res, capabilities, '获取成功');
+  } catch (error: any) {
+    errorResponse(res, error.message || '获取失败', 400);
+  }
+});
+
+/**
  * 获取产品绑定的能力列表
  * GET /api/product/:id/capabilities
  */

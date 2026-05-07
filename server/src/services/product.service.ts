@@ -267,6 +267,59 @@ export const getProductCapabilities = async (productId: number): Promise<any[]> 
 };
 
 /**
+ * 获取产品可绑定能力列表。
+ * 场景：产品管理页打开“绑定能力”弹窗时，只展示当前产品仍可新增绑定的已发布能力。
+ * 依赖：产品所属团队决定团队能力可见范围；平台能力 teamId 为空，允许所有产品绑定。
+ * @param productId 产品ID
+ * @param userId 当前操作用户ID
+ * @returns 可绑定能力列表
+ */
+export const getBindableCapabilities = async (productId: number, userId: number): Promise<Capability[]> => {
+  const product = await productRepository.findOne({ where: { id: productId } });
+  if (!product) {
+    throw new Error('产品不存在');
+  }
+
+  const productTeamId = product.teamId ?? null;
+
+  // 关键控制点：团队产品只能由当前团队成员查看可绑定能力，防止跨团队枚举能力。
+  if (productTeamId !== null) {
+    const membership = await teamMemberRepository.findOne({
+      where: { teamId: productTeamId, userId, status: 1 }
+    });
+    if (!membership) {
+      throw new Error('您没有权限操作此产品');
+    }
+  }
+
+  const boundProductCapabilities = await productCapabilityRepository.find({
+    where: { productId }
+  });
+  const boundCapabilityIds = boundProductCapabilities.map(item => item.capabilityId);
+
+  const queryBuilder = capabilityRepository
+    .createQueryBuilder('capability')
+    .where('capability.status = :publishedStatus', { publishedStatus: 1 });
+
+  if (productTeamId !== null) {
+    // 团队产品可绑定“本团队已发布能力 + 平台已发布能力”。
+    queryBuilder.andWhere('(capability.teamId = :teamId OR capability.teamId IS NULL)', { teamId: productTeamId });
+  } else {
+    // 平台产品没有团队上下文，只允许绑定平台能力，避免混入任意团队能力。
+    queryBuilder.andWhere('capability.teamId IS NULL');
+  }
+
+  if (boundCapabilityIds.length > 0) {
+    queryBuilder.andWhere('capability.id NOT IN (:...boundCapabilityIds)', { boundCapabilityIds });
+  }
+
+  return queryBuilder
+    .orderBy('capability.createdAt', 'DESC')
+    .addOrderBy('capability.id', 'DESC')
+    .getMany();
+};
+
+/**
  * 绑定能力到产品
  * @param productId 产品ID
  * @param userId 用户ID
@@ -302,6 +355,20 @@ export const bindCapability = async (
   });
   if (!capability) {
     throw new Error('能力不存在');
+  }
+
+  // 关键控制点：绑定入口必须与弹窗候选集保持同一契约，禁止绕过前端绑定草稿、下架或跨团队能力。
+  if (capability.status !== 1) {
+    throw new Error('只能绑定已发布能力');
+  }
+  const productTeamId = product.teamId ?? null;
+  const capabilityTeamId = capability.teamId ?? null;
+  if (productTeamId === null) {
+    if (capabilityTeamId !== null) {
+      throw new Error('该能力不可绑定到此产品');
+    }
+  } else if (capabilityTeamId !== null && capabilityTeamId !== productTeamId) {
+    throw new Error('该能力不可绑定到此产品');
   }
 
   // 检查是否已绑定

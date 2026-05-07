@@ -1,4 +1,5 @@
 import request from '@/utils/request'
+import type { Capability } from '@/api/capability'
 
 /**
  * 产品相关API
@@ -151,6 +152,15 @@ export const publishProduct = (id: number) => {
  */
 export const unpublishProduct = (id: number) => {
   return request.post(`/product/${id}/unpublish`) as Promise<any>
+}
+
+/**
+ * 获取产品可绑定能力列表
+ * 场景：产品绑定能力弹窗使用后端计算后的候选集，避免前端通用能力列表与产品团队范围不一致。
+ * @param productId 产品ID
+ */
+export const getBindableCapabilities = (productId: number) => {
+  return request.get(`/product/${productId}/bindable-capabilities`) as Promise<Capability[]>
 }
 
 /**

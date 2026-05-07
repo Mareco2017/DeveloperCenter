@@ -75,6 +75,9 @@
             v-model="bindForm.capabilityId"
             placeholder="请选择要绑定的能力"
             filterable
+            :loading="availableCapabilityLoading"
+            :disabled="availableCapabilityLoading"
+            no-data-text="暂无可绑定能力"
             style="width: 100%"
           >
             <el-option
@@ -102,7 +105,6 @@ import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus, ArrowLeft, Clock } from '@element-plus/icons-vue'
 import * as productApi from '@/api/product'
-import * as capabilityApi from '@/api/capability'
 import type { ProductCapability } from '@/api/product'
 import type { Capability } from '@/api/capability'
 
@@ -117,6 +119,7 @@ const productName = ref('')
 // 状态
 const loading = ref(false)
 const bindLoading = ref(false)
+const availableCapabilityLoading = ref(false)
 const productCapabilities = ref<ProductCapability[]>([])
 const availableCapabilities = ref<Capability[]>([])
 
@@ -163,15 +166,19 @@ const fetchProductCapabilities = async () => {
 
 /**
  * 获取可用能力列表
+ * 场景：绑定能力弹窗打开时，从产品专用接口获取“已发布、未绑定、当前产品可绑定”的能力候选。
+ * 依赖：后端按产品所属团队和平台能力统一计算范围，前端只负责展示。
  */
 const fetchAvailableCapabilities = async () => {
+  availableCapabilityLoading.value = true
   try {
-    const res = await capabilityApi.getCapabilityList({ status: 1 })
-    // 过滤掉已绑定的能力
-    const boundCapabilityIds = productCapabilities.value.map(item => item.capabilityId)
-    availableCapabilities.value = res.filter(item => !boundCapabilityIds.includes(item.id))
+    availableCapabilities.value = await productApi.getBindableCapabilities(productId.value)
   } catch (error) {
     console.error('获取能力列表失败:', error)
+    availableCapabilities.value = []
+    ElMessage.error('获取可绑定能力失败')
+  } finally {
+    availableCapabilityLoading.value = false
   }
 }
 
