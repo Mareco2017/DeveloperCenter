@@ -38,6 +38,15 @@
             <div class="scenario-time">
               <span class="create-time">{{ formatDate(scenario.createdAt) }}</span>
             </div>
+            <div class="scenario-identity">
+              <span class="identity-label">登录身份</span>
+              <el-tag
+                size="small"
+                :type="hasLoginIdentityConfig(scenario) ? 'success' : 'info'"
+              >
+                {{ formatScenarioLoginIdentitySummary(scenario.loginIdentityConfig) }}
+              </el-tag>
+            </div>
           </div>
         </div>
 
@@ -107,56 +116,19 @@
       title="登录身份配置"
       width="700px"
     >
-      <el-form :model="loginConfigForm" label-width="150px">
-        <el-divider content-position="left">登录方式</el-divider>
-        <el-form-item label="账号密码登录">
-          <el-switch v-model="loginConfigForm.loginMethods.password" />
-        </el-form-item>
-        <el-form-item label="短信验证码登录">
-          <el-switch v-model="loginConfigForm.loginMethods.sms" />
-        </el-form-item>
-        <el-form-item label="微信登录">
-          <el-switch v-model="loginConfigForm.loginMethods.wechat" />
-        </el-form-item>
-        <el-form-item label="单点登录(SSO)">
-          <el-switch v-model="loginConfigForm.loginMethods.sso" />
-        </el-form-item>
-
-        <el-divider content-position="left">密码策略</el-divider>
-        <el-form-item label="最小长度">
-          <el-input-number v-model="loginConfigForm.passwordPolicy.minLength" :min="6" :max="20" />
-        </el-form-item>
-        <el-form-item label="必须包含大写字母">
-          <el-switch v-model="loginConfigForm.passwordPolicy.requireUppercase" />
-        </el-form-item>
-        <el-form-item label="必须包含小写字母">
-          <el-switch v-model="loginConfigForm.passwordPolicy.requireLowercase" />
-        </el-form-item>
-        <el-form-item label="必须包含数字">
-          <el-switch v-model="loginConfigForm.passwordPolicy.requireNumber" />
-        </el-form-item>
-        <el-form-item label="必须包含特殊字符">
-          <el-switch v-model="loginConfigForm.passwordPolicy.requireSpecialChar" />
-        </el-form-item>
-
-        <el-divider content-position="left">验证码配置</el-divider>
-        <el-form-item label="启用验证码">
-          <el-switch v-model="loginConfigForm.captchaConfig.enabled" />
-        </el-form-item>
-        <el-form-item label="验证码类型" v-if="loginConfigForm.captchaConfig.enabled">
-          <el-radio-group v-model="loginConfigForm.captchaConfig.type">
-            <el-radio-button label="image">图形验证码</el-radio-button>
-            <el-radio-button label="slider">滑块验证</el-radio-button>
-          </el-radio-group>
-        </el-form-item>
-
-        <el-divider content-position="left">会话配置</el-divider>
-        <el-form-item label="会话超时时间(分钟)">
-          <el-input-number v-model="loginConfigForm.sessionConfig.timeout" :min="5" :max="1440" />
-        </el-form-item>
-        <el-form-item label="单设备登录">
-          <el-switch v-model="loginConfigForm.sessionConfig.singleDevice" />
-          <span class="form-tip">开启后同一账号只能在一个设备登录</span>
+      <el-form :model="loginConfigForm" label-width="120px" class="identity-config-form">
+        <el-form-item label="允许身份">
+          <el-checkbox-group v-model="loginConfigForm.identityTypes" class="identity-checkbox-group">
+            <el-checkbox
+              v-for="identity in scenarioApi.LOGIN_IDENTITY_OPTIONS"
+              :key="identity.code"
+              :value="identity.code"
+              border
+            >
+              {{ identity.label }}
+            </el-checkbox>
+          </el-checkbox-group>
+          <span class="form-tip">保存后，该场景只允许所选身份的账号登录。</span>
         </el-form-item>
       </el-form>
       <template #footer>
@@ -173,10 +145,10 @@
 import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Plus, ArrowLeft, Edit, Delete, Clock } from '@element-plus/icons-vue'
+import { Plus, ArrowLeft, Edit, Delete } from '@element-plus/icons-vue'
 import * as scenarioApi from '@/api/scenario'
 import * as productApi from '@/api/product'
-import type { Scenario } from '@/api/scenario'
+import type { Scenario, ScenarioLoginIdentityConfig } from '@/api/scenario'
 
 // 路由
 const route = useRoute()
@@ -198,28 +170,9 @@ const formRef = ref()
 const showLoginConfigDialog = ref(false)
 const loginConfigLoading = ref(false)
 const currentScenario = ref<Scenario | null>(null)
-const loginConfigForm = reactive({
-  loginMethods: {
-    password: true,
-    sms: false,
-    wechat: false,
-    sso: false
-  },
-  passwordPolicy: {
-    minLength: 8,
-    requireUppercase: false,
-    requireLowercase: false,
-    requireNumber: true,
-    requireSpecialChar: false
-  },
-  captchaConfig: {
-    enabled: true,
-    type: 'image' as 'image' | 'slider'
-  },
-  sessionConfig: {
-    timeout: 30,
-    singleDevice: false
-  }
+const loginConfigForm = reactive<ScenarioLoginIdentityConfig>({
+  version: 1,
+  identityTypes: []
 })
 
 // 表单
@@ -269,6 +222,16 @@ const formatDate = (date: string) => {
   return new Date(date).toLocaleDateString('zh-CN')
 }
 
+// 格式化登录身份摘要，场景卡片中用于快速判断配置状态。
+const formatScenarioLoginIdentitySummary = (configText?: string) => {
+  return scenarioApi.formatScenarioLoginIdentitySummary(configText)
+}
+
+// 判断场景是否已经配置有效身份，用于控制摘要标签状态。
+const hasLoginIdentityConfig = (scenario: Scenario) => {
+  return scenarioApi.parseScenarioLoginIdentityConfig(scenario.loginIdentityConfig).identityTypes.length > 0
+}
+
 // 编辑场景方案
 const handleEdit = (row: Scenario) => {
   isEdit.value = true
@@ -295,26 +258,30 @@ const handleDelete = async (row: Scenario) => {
 // 登录身份配置
 const handleLoginConfig = (scenario: Scenario) => {
   currentScenario.value = scenario
-  // 解析现有配置
-  if (scenario.loginIdentityConfig) {
-    try {
-      const config = JSON.parse(scenario.loginIdentityConfig)
-      Object.assign(loginConfigForm, config)
-    } catch {
-      // 使用默认值
-    }
-  }
+  // 打开配置时统一解析，旧版登录方式/密码策略结构会被识别为未配置。
+  const config = scenarioApi.parseScenarioLoginIdentityConfig(scenario.loginIdentityConfig)
+  loginConfigForm.version = config.version
+  loginConfigForm.identityTypes = [...config.identityTypes]
   showLoginConfigDialog.value = true
 }
 
 // 保存登录身份配置
 const saveLoginConfig = async () => {
   if (!currentScenario.value) return
+  if (loginConfigForm.identityTypes.length === 0) {
+    ElMessage.warning('请至少选择一个登录身份')
+    return
+  }
   
   loginConfigLoading.value = true
   try {
+    // 保存为 version=1 的身份白名单结构，覆盖旧版登录方式/密码策略配置。
+    const config: ScenarioLoginIdentityConfig = {
+      version: 1,
+      identityTypes: [...loginConfigForm.identityTypes]
+    }
     await scenarioApi.updateScenario(productId.value, currentScenario.value.id, {
-      loginIdentityConfig: JSON.stringify(loginConfigForm)
+      loginIdentityConfig: JSON.stringify(config)
     })
     ElMessage.success('保存成功')
     showLoginConfigDialog.value = false
@@ -492,6 +459,26 @@ onMounted(() => {
               color: #909399;
             }
           }
+
+          .scenario-identity {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            max-width: 100%;
+
+            .identity-label {
+              flex-shrink: 0;
+              font-size: 12px;
+              color: #909399;
+            }
+
+            .el-tag {
+              max-width: 170px;
+              overflow: hidden;
+              text-overflow: ellipsis;
+              white-space: nowrap;
+            }
+          }
         }
       }
 
@@ -580,6 +567,25 @@ onMounted(() => {
     margin-left: 8px;
     color: #909399;
     font-size: 12px;
+  }
+
+  .identity-config-form {
+    .identity-checkbox-group {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+      width: 100%;
+
+      .el-checkbox {
+        margin-right: 0;
+      }
+    }
+
+    .form-tip {
+      display: block;
+      margin: 10px 0 0;
+      line-height: 1.5;
+    }
   }
 }
 </style>

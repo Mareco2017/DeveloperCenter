@@ -4,6 +4,125 @@ import request from '@/utils/request'
  * 场景方案相关API
  */
 
+/**
+ * 场景登录身份编码
+ * 用于配置“哪些业务身份的账号允许进入当前场景”。
+ */
+export type LoginIdentityTypeCode =
+  | 'recruiter'
+  | 'candidate'
+  | 'student'
+  | 'level1_admin'
+  | 'level2_admin'
+  | 'super_admin'
+  | 'teacher'
+  | 'parent'
+
+export interface LoginIdentityOption {
+  code: LoginIdentityTypeCode
+  label: string
+}
+
+export interface ScenarioLoginIdentityConfig {
+  version: 1
+  identityTypes: LoginIdentityTypeCode[]
+}
+
+/**
+ * 平台统一登录身份字典
+ * 当前由配置端统一维护，后续如需产品自定义身份再扩展为服务端字典。
+ */
+export const LOGIN_IDENTITY_OPTIONS: LoginIdentityOption[] = [
+  { code: 'recruiter', label: '招聘者' },
+  { code: 'candidate', label: '应聘者' },
+  { code: 'student', label: '学员' },
+  { code: 'level1_admin', label: '一级管理员' },
+  { code: 'level2_admin', label: '二级管理员' },
+  { code: 'super_admin', label: '超级管理员' },
+  { code: 'teacher', label: '老师' },
+  { code: 'parent', label: '家长' }
+]
+
+const LOGIN_IDENTITY_LABEL_MAP = LOGIN_IDENTITY_OPTIONS.reduce(
+  (map, option) => {
+    map[option.code] = option.label
+    return map
+  },
+  {} as Record<LoginIdentityTypeCode, string>
+)
+
+const LOGIN_IDENTITY_CODE_SET = new Set<LoginIdentityTypeCode>(
+  LOGIN_IDENTITY_OPTIONS.map(option => option.code)
+)
+
+const emptyLoginIdentityConfig = (): ScenarioLoginIdentityConfig => ({
+  version: 1,
+  identityTypes: []
+})
+
+/**
+ * 判断是否为旧版登录方式/密码策略配置
+ * 旧结构只在配置端识别并按未配置处理，避免误展示为身份白名单。
+ */
+export const isLegacyLoginIdentityConfig = (config: unknown): boolean => {
+  if (!config || typeof config !== 'object') return false
+  const value = config as Record<string, unknown>
+  return Boolean(
+    value.loginMethods ||
+      value.passwordPolicy ||
+      value.captchaConfig ||
+      value.sessionConfig
+  )
+}
+
+/**
+ * 解析场景登录身份配置
+ * 只接受 version=1 且身份编码在统一字典内的数据，其余格式按未配置返回。
+ */
+export const parseScenarioLoginIdentityConfig = (
+  configText?: string
+): ScenarioLoginIdentityConfig => {
+  if (!configText) return emptyLoginIdentityConfig()
+
+  try {
+    const config = JSON.parse(configText) as unknown
+    if (isLegacyLoginIdentityConfig(config)) {
+      return emptyLoginIdentityConfig()
+    }
+
+    if (!config || typeof config !== 'object') {
+      return emptyLoginIdentityConfig()
+    }
+
+    const value = config as Partial<ScenarioLoginIdentityConfig>
+    if (value.version !== 1 || !Array.isArray(value.identityTypes)) {
+      return emptyLoginIdentityConfig()
+    }
+
+    const identityTypes = Array.from(new Set(value.identityTypes)).filter(
+      (identity): identity is LoginIdentityTypeCode =>
+        LOGIN_IDENTITY_CODE_SET.has(identity as LoginIdentityTypeCode)
+    )
+
+    return {
+      version: 1,
+      identityTypes
+    }
+  } catch {
+    return emptyLoginIdentityConfig()
+  }
+}
+
+/**
+ * 格式化场景登录身份摘要
+ * 用于场景卡片和终端场景预览，保持两个入口展示一致。
+ */
+export const formatScenarioLoginIdentitySummary = (configText?: string): string => {
+  const config = parseScenarioLoginIdentityConfig(configText)
+  if (config.identityTypes.length === 0) return '未配置'
+  return config.identityTypes.map(identity => LOGIN_IDENTITY_LABEL_MAP[identity]).join('、')
+}
+
 export interface Scenario {
   id: number
   productId: number
