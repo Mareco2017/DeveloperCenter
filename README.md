@@ -54,6 +54,22 @@ When deploying the frontend to Vercel, do not point the production build to
 - or keep the default `/api` and configure Vercel/API hosting to serve backend
   routes under the same domain.
 
+### Production Data Persistence
+
+The local backend uses SQLite at `server/data/developer.db`. Do not use SQLite
+as the Vercel API database: Serverless writable paths are temporary, so product
+and capability records can disappear after the function instance is recycled.
+
+For Vercel API deployments, configure a persistent PostgreSQL connection:
+
+```sh
+DATABASE_URL=postgres://user:password@host:5432/database
+```
+
+`POSTGRES_URL`, `POSTGRES_PRISMA_URL`, or `POSTGRES_URL_NON_POOLING` are also
+accepted. Hosted PostgreSQL uses SSL by default in Vercel; set `DB_SSL=false`
+only for a trusted local PostgreSQL instance.
+
 ### Lint with [ESLint](https://eslint.org/)
 
 ```sh

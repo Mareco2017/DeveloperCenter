@@ -1,5 +1,5 @@
 import 'reflect-metadata';
-import { DataSource } from 'typeorm';
+import { DataSource, DataSourceOptions } from 'typeorm';
 import { User } from '../entities/User';
 import { EnterpriseAuth } from '../entities/EnterpriseAuth';
 import { Team } from '../entities/Team';
@@ -15,17 +15,67 @@ import { ScenarioCapability } from '../entities/ScenarioCapability';
 import { Terminal } from '../entities/Terminal';
 import { hashPassword } from '../utils/password';
 
+type PostgresSslOptions = false | { rejectUnauthorized: boolean };
+
+export type RuntimeDatabaseOptions =
+  | { type: 'sqlite'; database: string }
+  | { type: 'postgres'; url: string; ssl?: PostgresSslOptions };
+
+type RuntimeEnv = Record<string, string | undefined>;
+
 /**
- * 解析 SQLite 数据库路径。
- * 场景：本地开发继续使用 server/data/developer.db；Vercel Serverless 文件系统只能写 /tmp，
- * 因此未显式配置 DB_PATH 时使用 /tmp/developer.db 作为函数运行期数据库。
+ * 判断当前是否运行在 Serverless 函数环境。
+ * 场景：Vercel 函数只保证 /tmp 可写，不保证业务数据持久化；数据库配置必须走持久化服务。
  */
-const resolveDatabasePath = (): string => {
-  if (process.env.DB_PATH) {
-    return process.env.DB_PATH;
+const isServerlessRuntime = (env: RuntimeEnv): boolean => Boolean(env.VERCEL);
+
+/**
+ * 读取 PostgreSQL 连接串。
+ * 场景：Vercel Postgres/Neon/Supabase 等持久数据库通常提供 DATABASE_URL 或 POSTGRES_URL。
+ */
+const resolvePostgresUrl = (env: RuntimeEnv): string | undefined => {
+  return env.DATABASE_URL || env.POSTGRES_URL || env.POSTGRES_PRISMA_URL || env.POSTGRES_URL_NON_POOLING;
+};
+
+/**
+ * 解析 PostgreSQL SSL 配置。
+ * 场景：托管数据库在 Vercel 上通常要求 SSL；本地 PostgreSQL 可通过 DB_SSL=false 显式关闭。
+ */
+const resolvePostgresSsl = (env: RuntimeEnv): PostgresSslOptions | undefined => {
+  if (env.DB_SSL === 'false' || env.DATABASE_SSL === 'false' || env.PGSSLMODE === 'disable') {
+    return false;
   }
 
-  return process.env.VERCEL ? '/tmp/developer.db' : './data/developer.db';
+  if (isServerlessRuntime(env) || env.DB_SSL === 'true' || env.PGSSLMODE === 'require') {
+    return {
+      rejectUnauthorized: env.DB_SSL_REJECT_UNAUTHORIZED === 'true'
+    };
+  }
+
+  return undefined;
+};
+
+/**
+ * 解析运行时数据库配置。
+ * 场景：本地开发继续使用 SQLite；线上 Serverless 必须使用 PostgreSQL 等持久数据库，避免能力、产品数据写入临时文件后丢失。
+ */
+export const resolveDatabaseOptions = (env: RuntimeEnv = process.env): RuntimeDatabaseOptions => {
+  const postgresUrl = resolvePostgresUrl(env);
+  if (postgresUrl) {
+    const ssl = resolvePostgresSsl(env);
+    return ssl === undefined
+      ? { type: 'postgres', url: postgresUrl }
+      : { type: 'postgres', url: postgresUrl, ssl };
+  }
+
+  if (isServerlessRuntime(env) && env.ALLOW_SERVERLESS_SQLITE !== 'true') {
+    throw new Error('Serverless 环境缺少持久化数据库配置，请配置 DATABASE_URL 或 POSTGRES_URL，不能使用临时 SQLite 保存能力、产品数据。');
+  }
+
+  return {
+    type: 'sqlite',
+    database: env.DB_PATH || './data/developer.db'
+  };
 };
 
 /**
@@ -33,8 +83,7 @@ const resolveDatabasePath = (): string => {
  * 使用TypeORM管理数据库连接和实体
  */
 export const AppDataSource = new DataSource({
-  type: 'sqlite',
-  database: resolveDatabasePath(),
+  ...resolveDatabaseOptions(),
   synchronize: true, // 开发环境自动同步，生产环境建议关闭
   logging: process.env.NODE_ENV === 'development',
   entities: [
@@ -54,7 +103,7 @@ export const AppDataSource = new DataSource({
   ],
   migrations: [],
   subscribers: []
-});
+} as DataSourceOptions);
 
 /**
  * 初始化默认管理员账号
