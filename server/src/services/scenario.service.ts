@@ -2,6 +2,7 @@ import { AppDataSource } from '../config/database';
 import { Scenario } from '../entities/Scenario';
 import { ScenarioCapability } from '../entities/ScenarioCapability';
 import { Capability } from '../entities/Capability';
+import { ProductCapability } from '../entities/ProductCapability';
 import { TeamMember } from '../entities/TeamMember';
 
 /**
@@ -12,6 +13,7 @@ import { TeamMember } from '../entities/TeamMember';
 const scenarioRepository = AppDataSource.getRepository(Scenario);
 const scenarioCapabilityRepository = AppDataSource.getRepository(ScenarioCapability);
 const capabilityRepository = AppDataSource.getRepository(Capability);
+const productCapabilityRepository = AppDataSource.getRepository(ProductCapability);
 const teamMemberRepository = AppDataSource.getRepository(TeamMember);
 
 /**
@@ -81,6 +83,18 @@ export const addScenarioCapability = async (
   });
   if (!capability) {
     throw new Error('能力不存在');
+  }
+
+  /**
+   * 关键控制点：场景能力必须从当前产品已关联能力中选择。
+   * 场景：即使前端弹窗只展示产品能力，后端仍要防止直接请求把任意能力挂到场景下。
+   * 依赖：Scenario.productId 与 ProductCapability 的产品-能力绑定关系。
+   */
+  const productCapability = await productCapabilityRepository.findOne({
+    where: { productId: scenario.productId, capabilityId: data.capabilityId }
+  });
+  if (!productCapability) {
+    throw new Error('能力未关联到当前产品，不能启用到场景方案');
   }
 
   // 检查是否已添加

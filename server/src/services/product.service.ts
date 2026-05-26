@@ -429,6 +429,21 @@ export const unbindCapability = async (
     throw new Error('绑定关系不存在');
   }
 
+  /**
+   * 关键控制点：产品能力是场景能力配置的上游真源。
+   * 场景：能力仍被任一场景方案引用时，产品层解绑会破坏下游配置，因此必须先让用户移除场景能力。
+   * 依赖：Scenario 与 ScenarioCapability 的关联关系，用于定位当前产品下的场景使用情况。
+   */
+  const scenarioCapabilityUsage = await scenarioCapabilityRepository
+    .createQueryBuilder('scenarioCapability')
+    .innerJoin('scenarioCapability.scenario', 'scenario')
+    .where('scenario.productId = :productId', { productId })
+    .andWhere('scenarioCapability.capabilityId = :capabilityId', { capabilityId })
+    .getOne();
+  if (scenarioCapabilityUsage) {
+    throw new Error('该能力已被场景方案使用，请先移除场景能力配置');
+  }
+
   await productCapabilityRepository.remove(productCapability);
 };
 

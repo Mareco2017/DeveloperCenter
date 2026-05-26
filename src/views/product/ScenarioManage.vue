@@ -60,6 +60,13 @@
           >
             登录身份
           </el-button>
+          <el-button
+            class="action-btn action-capability"
+            size="small"
+            @click="handleCapabilityConfig(scenario)"
+          >
+            能力配置
+          </el-button>
           <el-button 
             class="action-btn action-h5" 
             size="small"
@@ -139,6 +146,53 @@
         </el-button>
       </template>
     </el-dialog>
+
+    <!-- 能力配置对话框 -->
+    <el-dialog
+      v-model="showCapabilityConfigDialog"
+      title="能力配置"
+      width="720px"
+      @closed="resetCapabilityConfigForm"
+    >
+      <div v-loading="capabilityConfigLoading" class="capability-config-panel">
+        <el-empty
+          v-if="!capabilityConfigLoading && productCapabilities.length === 0"
+          description="该产品暂未关联能力"
+        >
+          <el-button type="primary" @click="goToProductCapabilityManage">
+            去关联能力
+          </el-button>
+        </el-empty>
+        <el-checkbox-group
+          v-else
+          v-model="selectedCapabilityIds"
+          class="capability-checkbox-group"
+        >
+          <el-checkbox
+            v-for="capability in productCapabilities"
+            :key="capability.capabilityId"
+            :value="capability.capabilityId"
+            border
+          >
+            <span class="capability-option">
+              <span class="capability-name">{{ capability.capabilityName }}</span>
+              <span class="capability-code">{{ capability.capabilityCode }}</span>
+            </span>
+          </el-checkbox>
+        </el-checkbox-group>
+      </div>
+      <template #footer>
+        <el-button @click="showCapabilityConfigDialog = false">取消</el-button>
+        <el-button
+          type="primary"
+          :disabled="productCapabilities.length === 0"
+          :loading="capabilitySaveLoading"
+          @click="saveCapabilityConfig"
+        >
+          保存
+        </el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -149,7 +203,8 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus, ArrowLeft, Edit, Delete } from '@element-plus/icons-vue'
 import * as scenarioApi from '@/api/scenario'
 import * as productApi from '@/api/product'
-import type { Scenario, ScenarioLoginIdentityConfig } from '@/api/scenario'
+import type { Scenario, ScenarioCapability, ScenarioLoginIdentityConfig } from '@/api/scenario'
+import type { ProductCapability } from '@/api/product'
 
 // 路由
 const route = useRoute()
@@ -184,6 +239,14 @@ const loginConfigForm = reactive<ScenarioLoginIdentityConfig>({
   version: 1,
   identityTypes: []
 })
+
+// 能力配置
+const showCapabilityConfigDialog = ref(false)
+const capabilityConfigLoading = ref(false)
+const capabilitySaveLoading = ref(false)
+const productCapabilities = ref<ProductCapability[]>([])
+const scenarioCapabilities = ref<ScenarioCapability[]>([])
+const selectedCapabilityIds = ref<number[]>([])
 
 // 表单
 const form = reactive({
@@ -354,6 +417,108 @@ const saveLoginConfig = async () => {
   } finally {
     loginConfigLoading.value = false
   }
+}
+
+/**
+ * 打开能力配置弹窗。
+ * 场景：用户在场景卡片点击“能力配置”时调用；依赖产品能力关联作为候选范围。
+ */
+const handleCapabilityConfig = async (scenario: Scenario) => {
+  const currentProductId = requireProductContext()
+  if (!currentProductId) return
+
+  currentScenario.value = scenario
+  showCapabilityConfigDialog.value = true
+  await loadCapabilityConfig(currentProductId, scenario.id)
+}
+
+/**
+ * 加载能力配置候选与当前场景已启用能力。
+ * 关键控制点：候选来自产品已关联能力，当前值来自场景能力配置，两者分开读取后在前端合并勾选状态。
+ */
+const loadCapabilityConfig = async (currentProductId: number, scenarioId: number) => {
+  capabilityConfigLoading.value = true
+  try {
+    const [productCapabilityList, scenarioCapabilityList] = await Promise.all([
+      productApi.getProductCapabilities(currentProductId),
+      scenarioApi.getScenarioCapabilities(scenarioId)
+    ])
+    productCapabilities.value = productCapabilityList
+    scenarioCapabilities.value = scenarioCapabilityList
+    selectedCapabilityIds.value = scenarioCapabilityList
+      .filter(capability => capability.status === 1)
+      .map(capability => capability.capabilityId)
+  } catch (error: any) {
+    console.error('获取能力配置失败:', error)
+    ElMessage.error(error.message || '获取能力配置失败')
+  } finally {
+    capabilityConfigLoading.value = false
+  }
+}
+
+/**
+ * 保存场景能力配置。
+ * 场景：用户通过多选列表决定当前场景启用哪些能力；依赖后端再次校验能力是否属于当前产品。
+ */
+const saveCapabilityConfig = async () => {
+  if (!currentScenario.value) return
+  const currentProductId = requireProductContext()
+  if (!currentProductId) return
+
+  capabilitySaveLoading.value = true
+  try {
+    const selectedIds = new Set(selectedCapabilityIds.value)
+    const existingByCapabilityId = new Map(
+      scenarioCapabilities.value.map(capability => [capability.capabilityId, capability])
+    )
+
+    /**
+     * 关键控制点：差量同步避免重复添加。
+     * 已存在但未勾选的场景能力会被移除；历史禁用记录重新勾选时恢复为启用。
+     */
+    for (const existing of scenarioCapabilities.value) {
+      if (!selectedIds.has(existing.capabilityId)) {
+        await scenarioApi.removeScenarioCapability(currentScenario.value.id, existing.id)
+      } else if (existing.status !== 1) {
+        await scenarioApi.updateScenarioCapability(currentScenario.value.id, existing.id, { status: 1 })
+      }
+    }
+
+    for (const capabilityId of selectedIds) {
+      if (!existingByCapabilityId.has(capabilityId)) {
+        await scenarioApi.addScenarioCapability(currentScenario.value.id, { capabilityId })
+      }
+    }
+
+    ElMessage.success('保存成功')
+    showCapabilityConfigDialog.value = false
+  } catch (error: any) {
+    ElMessage.error(error.message || '保存失败')
+  } finally {
+    capabilitySaveLoading.value = false
+  }
+}
+
+/**
+ * 重置能力配置弹窗状态。
+ * 场景：弹窗关闭动画结束后清理临时选择，避免下次打开时闪现上一个场景的配置。
+ */
+const resetCapabilityConfigForm = () => {
+  productCapabilities.value = []
+  scenarioCapabilities.value = []
+  selectedCapabilityIds.value = []
+}
+
+/**
+ * 跳转到产品能力管理。
+ * 场景：当前产品尚未关联任何能力时，给运营人员一个明确的上游配置入口。
+ */
+const goToProductCapabilityManage = () => {
+  const currentProductId = requireProductContext()
+  if (!currentProductId) return
+
+  showCapabilityConfigDialog.value = false
+  router.push(`/products/${currentProductId}/capabilities`)
 }
 
 // 移动端门户配置
@@ -577,10 +742,11 @@ watch(() => route.params.id, () => {
       .scenario-actions-row {
         display: flex;
         flex-direction: row;
+        flex-wrap: wrap;
         gap: 8px;
 
         .action-btn {
-          flex: 1;
+          flex: 1 1 calc(50% - 4px);
           justify-content: center;
           padding: 8px;
 
@@ -590,6 +756,15 @@ watch(() => route.params.id, () => {
 
             &:hover {
               background-color: #ecf5ff;
+            }
+          }
+
+          &.action-capability {
+            color: #e6a23c;
+            border-color: #e6a23c;
+
+            &:hover {
+              background-color: #fdf6ec;
             }
           }
 
@@ -649,6 +824,48 @@ watch(() => route.params.id, () => {
 
   .el-empty {
     flex: 1;
+  }
+
+  .capability-config-panel {
+    min-height: 180px;
+
+    .capability-checkbox-group {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+      width: 100%;
+
+      .el-checkbox {
+        align-items: flex-start;
+        height: auto;
+        min-height: 56px;
+        margin-right: 0;
+        padding: 10px 12px;
+      }
+    }
+
+    .capability-option {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      min-width: 0;
+
+      .capability-name {
+        font-size: 14px;
+        line-height: 1.4;
+        color: #303133;
+      }
+
+      .capability-code {
+        max-width: 260px;
+        overflow: hidden;
+        font-size: 12px;
+        line-height: 1.3;
+        color: #909399;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+    }
   }
 
   .form-tip {
